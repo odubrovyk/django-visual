@@ -76,6 +76,32 @@ def test_parse_urls_all_styles_only_inside_urlpatterns(tmp_path):
     ]
 
 
+def test_parse_urls_brackets_inside_patterns(tmp_path):
+    source = tmp_path / "urls.py"
+    source.write_text(
+        "urlpatterns = [\n"
+        "    re_path(r'^item/[0-9]+/$', views.item),\n"
+        "    path('tags/', views.tags, kwargs={'x': [1]}),  # ] in comment\n"
+        "    path('last/', views.last),\n"
+        "]\n"
+    )
+    lines = [l.strip() for l in parse_urls(str(source))]
+    assert [l.split(",")[0] for l in lines] == [
+        "re_path(r'^item/[0-9]+/$'",
+        "path('tags/'",
+        "path('last/'",
+    ]
+
+
+def test_parse_urls_single_line_list(tmp_path):
+    source = tmp_path / "urls.py"
+    source.write_text(
+        "urlpatterns = []\n"
+        "extra = path('d/', views.d)\n"
+    )
+    assert parse_urls(str(source)) == []
+
+
 # edit_installed_apps
 
 def test_edit_installed_apps_round_trip(make_project):

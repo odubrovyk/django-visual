@@ -84,7 +84,7 @@ def test_run_manage_starts_worker_process(monkeypatch, settings, tmp_path):
 
     assert run.run_manage("sample", "/p/sample") == 777
     assert started == {
-        "target": run.worker,
+        "target": run.serve,
         "args": ("sample", "/p/sample", settings.RUN_LOG_FILE),
         "started": True,
     }

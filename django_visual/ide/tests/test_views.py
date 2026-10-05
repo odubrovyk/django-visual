@@ -1,9 +1,11 @@
+import os
 import subprocess
 import sys
+import time
 
 import pytest
 
-from ide import views
+from ide import run, views
 from ide.open_project import project_settings
 
 PROJECT_URL = "/ide/open_project/sample/"
@@ -194,10 +196,44 @@ def test_run_project_get_returns_log(client, blog, settings, tmp_path):
 
 
 def test_stop_project_kills_process(client, blog):
-    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"], start_new_session=True)
     response = client.post(PROJECT_URL + "stop_project/", {"pid": str(proc.pid)})
     assert response.content == b"OK"
     assert proc.wait(timeout=5) == -9
+
+
+def wait_gone(pid, timeout=10):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return True
+        time.sleep(0.1)
+    return False
+
+
+def test_stop_project_kills_projects_server(client, projects_home):
+    # stub manage.py stands in for runserver: records its pid, then hangs
+    project = projects_home / "sample"
+    project.mkdir(parents=True)
+    pid_file = project / "server.pid"
+    (project / "manage.py").write_text(
+        "import os, time\n"
+        "open({!r}, 'w').write(str(os.getpid()))\n"
+        "time.sleep(60)\n".format(str(pid_file))
+    )
+
+    worker_pid = run.run_manage("sample", str(project))
+    deadline = time.monotonic() + 10
+    while not (pid_file.exists() and pid_file.read_text()) and time.monotonic() < deadline:
+        time.sleep(0.1)
+    server_pid = int(pid_file.read_text())
+
+    response = client.post(PROJECT_URL + "stop_project/", {"pid": str(worker_pid)})
+
+    assert response.content == b"OK"
+    assert wait_gone(server_pid), "project's server outlived Stop"
 
 
 def test_stop_project_unknown_pid(client, blog):

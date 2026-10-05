@@ -1,6 +1,7 @@
 import os
 from os.path import join, isdir
 import random
+import signal
 
 from django.shortcuts import render, redirect
 from django.http import Http404, HttpResponse
@@ -244,7 +245,8 @@ def stop_project(request, project_id):
 		pid = request.POST.get("pid", "")
 		if pid:
 			try:
-				os.kill(int(pid), 9)
+				# pid leads the project's process group, see run.serve
+				os.killpg(int(pid), signal.SIGKILL)
 				return HttpResponse("OK")
 			except OSError as e:
 				return HttpResponse(str(e))

@@ -134,10 +134,14 @@ def parse_urls(source):
 				if any(func in line for func in URL_FUNCTIONS):
 					res.append(line)
 
-			if START_MARKER in line:
-				grep_urls = True
+			code = strip_comment(line).strip()
 
-			if END_MARKER in line:
+			if START_MARKER in line:
+				# list may be closed on the same line: urlpatterns = []
+				grep_urls = not code.endswith(END_MARKER)
+
+			# ']' closing urlpatterns, not one inside a regex or comment
+			elif code.startswith(END_MARKER):
 				grep_urls = False
 
 	return res

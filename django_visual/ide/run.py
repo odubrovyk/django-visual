@@ -54,7 +54,16 @@ def worker(project_id, project_home, log_file):
         log.write("\nDevelopment server stopped\n")
 
 
+def serve(project_id, project_home, log_file):
+    """
+    Worker process entry: leads its own process group, so Stop
+    kills manage.py and its autoreloader child along with it
+    """
+    os.setsid()
+    worker(project_id, project_home, log_file)
+
+
 def run_manage(project_id, project_home):
-    p = Process(target=worker, args=(project_id, project_home, settings.RUN_LOG_FILE))
+    p = Process(target=serve, args=(project_id, project_home, settings.RUN_LOG_FILE))
     p.start()
     return p.pid
