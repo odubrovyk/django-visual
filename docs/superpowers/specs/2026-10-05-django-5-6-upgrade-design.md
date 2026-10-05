@@ -61,6 +61,9 @@ work on that same Django, and a test suite proves both.
   stdout), argument lists instead of a shell `&&` string (three sequential
   calls, stop on first failure). Log path becomes setting `RUN_LOG_FILE`
   (default `TOP_DIR/project_run.log`) and is passed to the worker.
+  The worker (`run.serve`) calls `setsid()` so Stop can `killpg` it together
+  with runserver and its autoreloader; a watchdog thread kills that group
+  when the IDE process exits (Ctrl+C no longer reaches it after `setsid`).
 - `build_project_tree()`: fix mixed tabs/spaces (TabError on Py3), skip
   `__pycache__` dirs, sorted output.
 - `views.py`: `open_project` → 404 for unknown project; `add_application` /

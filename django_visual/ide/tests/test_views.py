@@ -236,6 +236,54 @@ def test_stop_project_kills_projects_server(client, projects_home):
     assert wait_gone(server_pid), "project's server outlived Stop"
 
 
+def test_projects_server_dies_with_ide(tmp_path):
+    # Ctrl+C / kill of the IDE must not leave the project serving its port
+    project = tmp_path / "sample"
+    project.mkdir()
+    pid_file = project / "server.pid"
+    (project / "manage.py").write_text(
+        "import os, time\n"
+        "open({!r}, 'w').write(str(os.getpid()))\n"
+        "time.sleep(60)\n".format(str(pid_file))
+    )
+    ide = subprocess.Popen([
+        sys.executable, "-c",
+        "import sys, time\n"
+        "sys.path.insert(0, {!r})\n"
+        "from multiprocessing import Process\n"
+        "from ide import run\n"
+        "Process(target=run.serve, args=('sample', {!r}, {!r})).start()\n"
+        "time.sleep(60)\n".format(
+            os.path.dirname(os.path.dirname(run.__file__)), str(project), str(tmp_path / "run.log"))
+    ])
+    try:
+        deadline = time.monotonic() + 10
+        while not (pid_file.exists() and pid_file.read_text()) and time.monotonic() < deadline:
+            time.sleep(0.1)
+        server_pid = int(pid_file.read_text())
+    finally:
+        ide.kill()
+        ide.wait()
+
+    assert wait_gone(server_pid), "project's server outlived the IDE"
+
+
+def test_stop_project_ignores_reserved_pids(client, blog, monkeypatch):
+    calls = []
+    monkeypatch.setattr(views.os, "killpg", lambda *a: calls.append(a))
+    for pid in ("-1", "0", "1"):
+        assert client.post(PROJECT_URL + "stop_project/", {"pid": pid}).content == b""
+    assert calls == []
+
+
+def test_stop_project_before_worker_leads_group(client, blog):
+    # Stop can arrive before run.serve has called setsid
+    proc = subprocess.Popen([sys.executable, "-c", "import time; time.sleep(30)"])
+    response = client.post(PROJECT_URL + "stop_project/", {"pid": str(proc.pid)})
+    assert response.content == b"OK"
+    assert proc.wait(timeout=5) == -9
+
+
 def test_stop_project_unknown_pid(client, blog):
     proc = subprocess.Popen([sys.executable, "-c", "pass"])
     proc.wait()

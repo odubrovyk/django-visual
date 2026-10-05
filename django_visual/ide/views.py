@@ -245,10 +245,18 @@ def stop_project(request, project_id):
 		pid = request.POST.get("pid", "")
 		if pid:
 			try:
-				# pid leads the project's process group, see run.serve
-				os.killpg(int(pid), signal.SIGKILL)
+				pid = int(pid)
+				# 0 and 1 would hit the IDE's own group or every user process
+				if pid <= 1:
+					return HttpResponse("")
+				try:
+					# pid leads the project's process group, see run.serve
+					os.killpg(pid, signal.SIGKILL)
+				except ProcessLookupError:
+					# worker not yet past setsid, its group doesn't exist yet
+					os.kill(pid, signal.SIGKILL)
 				return HttpResponse("OK")
-			except OSError as e:
+			except (OSError, ValueError) as e:
 				return HttpResponse(str(e))
 
 	return HttpResponse("")

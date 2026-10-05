@@ -1,6 +1,9 @@
 import os
+import signal
 import subprocess
 import sys
+import threading
+import time
 from multiprocessing import Process
 
 from django.conf import settings
@@ -54,12 +57,25 @@ def worker(project_id, project_home, log_file):
         log.write("\nDevelopment server stopped\n")
 
 
+def watch_parent(parent_pid, interval=0.5):
+    """
+    Kills the worker's process group once the IDE is gone: setsid keeps
+    terminal Ctrl+C from reaching the project's server, so it would
+    otherwise outlive the IDE and keep its port
+    """
+    while os.getppid() == parent_pid:
+        time.sleep(interval)
+    os.killpg(0, signal.SIGKILL)
+
+
 def serve(project_id, project_home, log_file):
     """
     Worker process entry: leads its own process group, so Stop
     kills manage.py and its autoreloader child along with it
     """
+    parent_pid = os.getppid()
     os.setsid()
+    threading.Thread(target=watch_parent, args=(parent_pid,), daemon=True).start()
     worker(project_id, project_home, log_file)
 
 

@@ -88,3 +88,14 @@ def test_run_manage_starts_worker_process(monkeypatch, settings, tmp_path):
         "args": ("sample", "/p/sample", settings.RUN_LOG_FILE),
         "started": True,
     }
+
+
+def test_watch_parent_kills_group_when_parent_exits(monkeypatch):
+    ppids = iter([100, 100, 1])
+    killed = []
+    monkeypatch.setattr(run.os, "getppid", lambda: next(ppids))
+    monkeypatch.setattr(run.os, "killpg", lambda pgid, sig: killed.append((pgid, sig)))
+
+    run.watch_parent(100, interval=0)
+
+    assert killed == [(0, run.signal.SIGKILL)]
